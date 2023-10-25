@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="description" content="An in-browser generator of bitmap equirectangular cylindrical maps.  Features include customizable standard parallels, aspect ratio, pan and zoom, lakes, rivers, and cities, and color style options.">
+        
+        <link rel="canonical" href="//nationalrecordingregistry.net/maps" itemprop="url">
+        
+        <title itemprop='name'>Cylindrical Equal-Area Map Generator</title>
+
+        <style>
+            html {
+                background-color: black;
+            }
+            h1, h2, h3 {
+                margin-top: 10px;
+                margin-bottom: 10px;
+            }
+            button {
+                text-align: center;
+                font-size: 15px;
+                text-decoration: none;
+            }
+
+            .main-box {
+                background-color: lightgray;
+                width: 75%;
+                min-width: 1000px;
+                margin: auto;
+            }
+            .inner-text-box {
+                background-color: lightgray;
+                margin: 6px;
+                padding: 6px;
+            }
+            .control-box-wrapper {
+                width: 260px;
+                margin: 0px;
+                padding: 0px;
+            }
+            .control-box {
+                width: 240px;
+                border: 1px solid darkgray;
+            }
+            .sticky {
+                position: fixed;
+                top: 0;
+            }
+        </style>
+    </head>
+
+    <body>
+        <div class="main-box">
+            <h1 style="text-align: center;">Cylindrical Equal-Area Map Generator</h1>
+            <div style="display: flex;">
+                <div id="canvas-holder" style="background-color: lightblue; flex: 1; padding: 5px;">
+                    <div id="top-info-box" class="inner-text-box">
+                        An equal-area cylindrical projection is produced by stretching a typical
+                        cylindrical projection (one where longitude lines are vertical and latitudes
+                        horizontal) in the vertical direction, not uniformly, making the area near the
+                        equator taller and the area near the poles smaller, in accordance with the cosine 
+                        of the latitude, effecting an equal-area projection.  This distorts shapes, which 
+                        will appear correct only near the "standard" latitude, which determines a factor 
+                        by which the stretched image is scaled in the vertical direction.  The standard 
+                        latitude also determines the aspect ratio of the area necessary to show the entire world.
+                        <em>(Double-click to remove this text.)</em>
+                    </div>
+                    <h4 id="map_detail">Zoom:  1; Center:  (0N, 0E)</h4>
+                    <canvas id="main_map" width="720" height="480" style="border: 1px solid black">
+                        Your browser does not support the canvas</canvas>
+                    <p>Right-click the canvas and select "save image" to save a map!</p>
+                    <h3>Details to include</h3>
+                    <div style="display: flex;">
+                        <div style="flex: 1">
+                            <input type="checkbox">
+                            <label for="chk_coasts">Countries</label><br>
+                            <input type="checkbox">
+                            <label for="chk_countries">Rivers</label><br>
+                            <input type="checkbox">
+                            <label for="chk_cities">Lakes</label><br>
+                        </div>
+                        <div style="flex: 1">
+                            <input type="checkbox">
+                            <label for="chk_llines">Latitude/longitude lines</label><br>
+                            <input type="checkbox">
+                            <label for="chk_lmarks">Latitude/longitude markers</label><br>
+                            <input type="checkbox">
+                            <label for="chk_rivers">Cities</label><br>
+                        </div>
+                    </div>
+                    <div class="inner-text-box">
+                        Data used to make the maps above from Natural Earth via geojson.xyz;
+                        the scalerank property is used to determine the levels at which varies 
+                        cities and rivers appear.
+                    </div>
+                </div>
+                <div id="control-box-wrapper" class="control-box-wrapper">
+                    <div id="control-box" class="inner-text-box control-box">
+                        <h2>Map controls</h2>
+                        <div style="overflow-y: scroll; height: 85vh;">
+                            <h3>Pan and zoom</h3>
+                            <div style="height: 100px; width: 100px; margin: auto;">
+                                <button id="up_button" style="height: 30px; width: 30px; margin-left: 35px">↑</button><br>
+                                <button id="left_button" style="height: 30px; width: 30px;">←</button>
+                                <button id="right_button" style="height: 30px; width: 30px; margin-left: 35px;">→</button>
+                                <button id="down_button" style="height: 30px; width: 30px; margin-left: 35px;">↓</button>
+                            </div>
+                            <div style="height: 65px; width: 36px; margin: auto;">
+                                <button id="in_button" style="height: 30px; width: 30px; margin: 3px">+</button><br>
+                                <button id="out_button" style="height: 30px; width: 30px; margin: 3px">-</button>
+                            </div>
+                            <h3>Standard parallel</h3>
+                            <input type="radio" id="eq_std_prl" name="r_std_parallel" value="Equatorial">
+                            <label for="eq_std_prl">Equatorial</label><br>
+                            <input type="radio" id="custom_std_prl" name="r_std_parallel" value="Custom">
+                            <label for="custom_std_prl">Custom: </label>
+                            <input type="number" id="ipt_std_prl" min="0" max="90" step = "0.1"><br>
+                            <input type="radio" id="match_std_prl" name="r_std_parallel" value="Match">
+                            <label for="match_std_prl">Match aspect ratio</label>
+                            <h3>Aspect ratio</h3>
+                            <input type="radio" id="asp_square" name="radio_aspect" value="Square">
+                            <label for="asp_square">Square (1:1)</label><br>
+                            <input type="radio" id="asp_silver" name="radio_aspect" value="Silver">
+                            <label for="asp_silver">Silver (A-paper, 1:1.414)</label><br>
+                            <input type="radio" id="asp_golden" name="radio_aspect" value="Golden">
+                            <label for="asp_golden">Golden (1:1.618)</label><br>
+                            <input type="radio" id="asp_custom" name="radio_aspect" value="Custom">
+                            <label for="asp_custom">Custom:  1:</label>
+                            <input type="number" id="ipt_asp_ratio" min="0" max="3.1415" step="0.0001"><br>
+                            <input type="radio" id="asp_match" name="radio_aspect" value="Match">
+                            <label for="asp_match">Match latitude of focus</label>
+                            <h3>Color scheme</h3>
+                            <input type="radio" id="col_radar" name="radio_color" value="Radar">
+                            <label for="col_radar" style="background-color: black; color: white; padding: 0px 5px">Radar</label><br>
+                            <input type="radio" id="col_print" name="radio_color" value="Printout">
+                            <label for="col_print" style="background-color: white; color: black; padding: 0px 5px">Printout</label><br>
+                            <input type="radio" id="col_antique" name="radio_color" value="Antique">
+                            <label for="col_antique" style="background-color: antiquewhite; color: brown; padding: 0px 5px">Old map</label><br>
+                            <input type="radio" id="col_cloud" name="radio_color" value="Clouds">
+                            <label for="col_cloud" style="background-color: lightblue; color: white; padding: 0px 5px">Clouds</label><br>
+                            <h3>Map width</h3>
+                            <input type="radio" id="wid_medium" name="radio_width" value="Medium">
+                            <label for="wid_medium">Medium (720 px)</label><br>
+                            <input type="radio" id="wid_wide" name="radio_width" value="Wide">
+                            <label for="wid_wide">Wide (960 px)</label><br>
+                            <input type="radio" id="wid_very_wide" name="radio_width" value="Very wide">
+                            <label for="wid_very_wide">Very wide (1200 px)</label><br>
+                            <div style="width: 160px; margin: auto">
+                                <button id="enlarge_button" style="padding:10px; margin: 10px;">Enlarge</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>     
+        </div>
+
+        <script src="files/geon.js"></script>
+        <script src="files/rivers_original.js"></script>
+        <script src="files/cities_original.js"></script>
+        <script src="files/lakes_original.js"></script>
+        
+        <script>
+            ///////////////////////////////////////////////////
+            // Access document elements
+            const mapbox = document.querySelector("div[class='main-box']");
+            const topbox = document.getElementById("top-info-box"); // Make topbox removable with a double-click.
+            topbox.addEventListener("dblclick", function (e) { topbox.style["display"] = "none"; }, false);
+            const mymap = document.getElementById("main_map");
+            const mapcxt = mymap.getContext("2d");
+            mymap.addEventListener("dblclick", (e) => { map_jump(e); }, false);
+            const feature_buttons = document.querySelectorAll("input[type='checkbox']");
+            feature_buttons.forEach(function(e) { e.checked = true });
+
+            const color_buttons = document.querySelectorAll("input[name='radio_color']");
+            color_buttons[0].setAttribute("checked", "true");
+            const aspect_buttons = document.querySelectorAll("input[name='radio_aspect']");
+            aspect_buttons[4].setAttribute("checked", "true");
+            const std_parallel_buttons = document.querySelectorAll("input[name='r_std_parallel']");
+            std_parallel_buttons[0].setAttribute("checked", "true");
+            const map_detail = document.getElementById("map_detail");
+            const arrow_buttons = [document.getElementById("up_button"), document.getElementById("right_button"),
+                document.getElementById("down_button"), document.getElementById("left_button")];
+            const zoom_buttons = [document.getElementById("in_button"), document.getElementById("out_button")];
+            const ipt_asp_ratio = document.getElementById("ipt_asp_ratio");
+            const ipt_std_prl = document.getElementById("ipt_std_prl");
+            const width_buttons = document.querySelectorAll("input[name='radio_width']");
+            width_buttons[0].setAttribute("checked","true");
+            const enlarge_button = document.getElementById("enlarge_button");
+            const controlbox = document.getElementById("control-box"); // Make control box remain even when page is scrolled.
+            const controlboxwrap = document.getElementById("control-box-wrapper");
+            window.addEventListener("scroll", function() { 
+                if (window.pageYOffset > controlbox.offsetTop) {
+                    controlbox.classList.add("sticky"); // This keeps the control box in place.
+                    controlbox.style["left"] = Math.round(controlboxwrap.offsetLeft - window.pageXOffset) + "px";
+                }
+                else {
+                    controlbox.classList.remove("sticky");
+                }
+            });
+
+            // Degrees from radians function (not built-in?)
+            function deg(radians) { return radians * 180 / Math.PI }
+            function rad(degrees) { return degrees * Math.PI / 180 }
+
+            ////////////////////////////////////////////////////
+            // State variables
+            let backcolor = "black"; let forecolor = "white"; // The background color and line color on the map
+            let zoom = 1; // Scaling factor.  1 means that the whole world can be visible; larger numbers scale the map about the center.
+            let center_lat = 0; let center_long = 0; // The coordinates of the center of the map - in RADIANS
+            let sin_ctr_lat = Math.sin(center_lat) // The sine of the latitude in the center (for calculations)
+            let std_prl = 0; let sec_std_prl = 1; // Standard parallel (in RADIANS) - could be described as the latitudes at which the map shapes are least distorted.
+              // Its secant is the factor by which latitudes are scaled (after being scaled by their own cosine to effect equal areas)
+            let asp_ratio = Math.PI; // The factor by which the map is wider than tall.
+            let map_width = 720; let map_height = map_width/asp_ratio; // The dimensions of the map canvas, in pixels.
+            let coordinate_string; // The current coordinates, as a string, e.g. "10°S 10°E".
+            function get_coordinate_string() {
+                coordinate_string = (Math.abs(Math.round(deg(center_lat) * 100) / 100) + "°" + (center_lat > 0 ? "N":"S") + " " + Math.abs(Math.round(deg(center_long) * 100) / 100) + "°" + (center_long > 0 ? "E":"W"));
+            } get_coordinate_string();
+            let min_lat; let max_lat; let min_long; let max_long; // The latitudes and longitudes at the edges of
+              // the map - in DEGREES - for comparison to values in shapefiles
+            let h; // A helper variable that shows up frequently in latitude calculations, found as:
+            // h = map_height * Math.PI / ( zoom * sec_std_prl * map_width );
+            function get_edge_values() {
+                min_long = deg(center_long - Math.PI / zoom); max_long = deg(center_long + Math.PI / zoom);
+                h = map_height * Math.PI / ( zoom * sec_std_prl * map_width );
+                min_lat = (sin_ctr_lat - h <= -1) ? -90 : deg(Math.asin(sin_ctr_lat - h));
+                max_lat = (sin_ctr_lat + h >= 1) ? 90 : deg(Math.asin(sin_ctr_lat + h));
+            } get_edge_values();
+            // Helper function to determine if a pair of latitude and longitude coordinates is in the map
+            function map_contains(coords) {
+                if (min_lat > coords[1] || coords[1] > max_lat) return 0; // Not on map
+                if (min_long < coords[0] && max_long > coords[0]) return 1; // On map
+                if (max_long > 180 && coords[0] < max_long - 360) return 2; // On map's eastern overlap
+                if (min_long < -180 && coords[0] > min_long + 360) return -1; // On map's western overlap
+                return 0;
+            }
+
+            draw_map();
+
+            //////////////////////////////////////////
+            // Add event listeners to document elements
+            for (const color_button of color_buttons) { // Color buttons will change color, then draw the map
+                color_button.addEventListener("click", get_color, false);
+                color_button.addEventListener("click", draw_map, false);
+            }
+            
+            // Arrow buttons move the coordinates of the center of the map
+            arrow_buttons[0].addEventListener("click", () => {
+                center_lat = (sin_ctr_lat + h >= 1) ? (Math.asin( 1 - h )) : Math.asin(sin_ctr_lat + h);
+                sin_ctr_lat = Math.sin(center_lat);
+            }, false);
+            arrow_buttons[1].addEventListener("click", () => {
+                center_long += Math.PI / (2 * zoom);
+                if (center_long > Math.PI) center_long -= 2*Math.PI;
+            }, false);
+            arrow_buttons[2].addEventListener("click", () => {
+                center_lat = (sin_ctr_lat - h <= -1) ? (Math.asin( -1 + h )) : Math.asin(sin_ctr_lat - h);
+                sin_ctr_lat = Math.sin(center_lat);
+            }, false);
+            arrow_buttons[3].addEventListener("click", () => {
+                center_long -= Math.PI / (2 * zoom);
+                if (center_long < -Math.PI) center_long += 2*Math.PI;
+            }, false);
+            for (const arrow_button of arrow_buttons) {
+                arrow_button.addEventListener("click", get_coordinate_string, false);
+                arrow_button.addEventListener("click", draw_map, false);
+            }
+            
+            // Zoom buttons affect the zoom        
+            zoom_buttons[0].addEventListener("click", () => {
+                // Zoom in method - proceed through series 1, 2, 3, 4, 6, 8, 12, 16, (powers of two, numbers halfway between them)
+                if (zoom % 3) {
+                    if (zoom == 1) zoom = 2;
+                    else zoom *= 3 / 2;
+                } else zoom *= 4 / 3;
+                h = map_height * Math.PI / ( zoom * sec_std_prl * map_width ); // Update helper variable h.
+            }, false);
+            zoom_buttons[1].addEventListener("click", () => {
+                // Zoom out method - proceed backward though that series, but not past one.
+                if (zoom % 3) {
+                    if (zoom > 3) zoom *= 3 / 4;
+                    else zoom = 1;
+                } else {
+                    zoom *= 2 / 3;
+                }
+                h = map_height * Math.PI / ( zoom * sec_std_prl * map_width );
+                // Make sure not to go past the top/bottom of the world
+                center_lat = (sin_ctr_lat + h >= 1) ? (Math.asin( 1 - h )) : ( (sin_ctr_lat - h <= -1) ? (Math.asin( h - 1 )) : center_lat );
+                sin_ctr_lat = Math.sin(center_lat);
+            }, false);
+            zoom_buttons[0].addEventListener("click", draw_map, false);
+            zoom_buttons[1].addEventListener("click", draw_map, false);
+                    
+            // Standard parallel buttons, and playing with the text box for custom standard parallel, changes the standard parallel
+            for (const std_parallel_button of std_parallel_buttons) {
+                std_parallel_button.addEventListener("click", get_std_parallel, false);
+                std_parallel_button.addEventListener("click", draw_map, false);
+            }
+            ipt_std_prl.addEventListener("change", () => { std_parallel_buttons[1].setAttribute("checked", "true"); get_std_parallel(); draw_map() } )
+            
+            // Aspect ratio radio buttons, and playing with the text box for custom ratios, changes the aspect 
+            aspect_buttons.forEach(function (e) {
+                e.addEventListener("click", get_aspect_ratio, false);
+                e.addEventListener("click", draw_map, false);
+            })
+            ipt_asp_ratio.addEventListener("change", () => { aspect_buttons[3].setAttribute("checked", "true"); get_aspect_ratio(); draw_map() } )
+            
+            // Feature buttons - checkboxes about which feature - redraw the map when clicked
+            feature_buttons.forEach(function (e) { e.addEventListener("click",draw_map,false); }); // Removing latitude/longitude lines removes markers
+            feature_buttons[3].addEventListener("change", function (e) { if (!e.target.checked) feature_buttons[4].checked = false; }, false)
+
+            // Width radio buttons affect the width
+            width_buttons.forEach(function(e) { e.addEventListener("click", get_width, false); });
+            enlarge_button.addEventListener("click", double_or_not, false);
+
+            // Functions to set values to state variables from buttons
+            function get_color() {
+                let color_scheme;
+                for (const color_button of color_buttons) {
+                    if (color_button.checked) { color_scheme = color_button.value; break; }
+                }
+                switch (color_scheme) {
+                    case "Radar":
+                        forecolor = "white"; backcolor = "black";
+                        break;
+                    case "Printout":
+                        forecolor = "black"; backcolor = "white";
+                        break;
+                    case "Antique":
+                        forecolor = "brown"; backcolor = "antiquewhite";
+                        break;
+                    case "Clouds":
+                        forecolor = "white"; backcolor = "lightblue";
+                        break;
+                }
+            }
+
+            function note_aspect_choice() {
+                for (const aspect_button of aspect_buttons) {
+                    if (aspect_button.checked) return aspect_button.value;
+                }
+            }
+
+            function get_aspect_ratio() {
+                switch (note_aspect_choice()) {
+                    case "Square":
+                        map_height = map_width;
+                        break;
+                    case "Silver":
+                        map_height = map_width / Math.SQRT2;
+                        break;
+                    case "Golden":
+                        map_height = map_width * 2 / ( Math.sqrt(5) + 1);
+                        break;
+                    case "Custom":
+                        map_height = map_width / ipt_asp_ratio.value;
+                        break;
+                    case "Match":
+                        map_height = map_width * sec_std_prl / Math.PI;
+                }
+                if (note_latitude_choice() == "Match") { 
+                    std_prl = Math.acos(map_width / (map_height * Math.PI));
+                    sec_std_prl = 1 / Math.cos(std_prl);
+                }
+                h = map_height * Math.PI / ( zoom * sec_std_prl * map_width );
+            }
+
+            function note_latitude_choice() {
+                for (const std_parallel_button of std_parallel_buttons) {
+                    if (std_parallel_button.checked) return std_parallel_button.value;
+                }
+            }
+
+            function get_std_parallel() {
+                switch (note_latitude_choice()) {
+                    case "Equatorial":
+                        std_prl = 0;
+                        break;
+                    case "Custom":
+                        std_prl = rad(ipt_std_prl.value);
+                        break;
+                    case "Match":
+                        std_prl = Math.acos(map_width / (map_height * Math.PI));
+                }
+                sec_std_prl = 1 / Math.cos(std_prl);
+                if (note_aspect_choice() == "Match") map_height = map_width * sec_std_prl / Math.PI;
+                h = map_height * Math.PI / ( zoom * sec_std_prl * map_width );
+            }
+
+            function note_width_choice() {
+                for (const width_button of width_buttons) {
+                    if (width_button.checked) return width_button.value;
+                }
+            }
+
+            // A helper function that takes the determined width and changes the canvas dimensions, when radio button changes or major button hit
+            function effect_width() {
+                get_aspect_ratio();
+                mapbox.style["min-width"] = (map_width + 280) + "px";
+                mapbox.style["margin"] = "auto";
+                mymap.setAttribute("width",map_width);
+                mymap.setAttribute("height",map_height);
+                draw_map();
+            }
+
+            function get_width() {
+                switch (note_width_choice()) {
+                    case "Medium":
+                        if (map_width > 1300) map_width = 1440; else map_width = 720;
+                        break;
+                    case "Wide":
+                        if (map_width > 1300) map_width = 1920; else map_width = 960;
+                        break;
+                    default:
+                        if (map_width > 1300) map_width = 2400; else map_width = 1200;
+                }
+                effect_width();
+            }
+
+            function double_or_not() {
+                if (map_width > 1300) {
+                    map_width /= 2;
+                    enlarge_button.innerHTML = "Enlarge";
+                    width_buttons.forEach( function(e, i) { document.querySelector(`label[for=${e.id}]`).innerHTML = `${e.value} (${720 + 240*i}px)`; } );
+                } else {
+                    map_width *= 2;
+                    enlarge_button.innerHTML = "Compact";
+                    width_buttons.forEach( function(e, i) { document.querySelector(`label[for=${e.id}]`).innerHTML = `${e.value} (${1440 + 480*i}px)`; });
+                }
+                effect_width();
+            }
+
+            function map_jump(e) {
+                center_long = m_long(e.offsetX);
+                center_lat = m_lat(e.offsetY);
+                if (Math.sin(center_lat) + h >= 1) center_lat = Math.asin(1 - h);
+                else if (Math.sin(center_lat) - h <= -1) center_lat = Math.asin(h - 1);
+                sin_ctr_lat = Math.sin(center_lat);
+                get_coordinate_string();
+                draw_map();
+            }
+
+            /////////////////////////////////////////////////////////////////
+            // Drawing the map!
+            // Map drawing - helper functions return x and y coordinate in canvas given long and lat in degrees
+            function cxt_x(longitude) { return ((rad(longitude) - center_long) * zoom / Math.PI + 1) * map_width / 2; }
+            // function cxt_y(latitude) { return ( 1 - (Math.sin(rad(latitude)) - sin_ctr_lat) * zoom * sec_std_prl ) * map_height / 2; }
+            function cxt_y(latitude) { return ( (Math.sin(rad(latitude)) - sin_ctr_lat) * sec_std_prl * zoom * -map_width / ( 2 * Math.PI ) + map_height/2 ); }
+            
+            // Not quite inverse functions of the above, these convert canvas locations to radians
+            function m_long(canvx) { return ( ( 2 * canvx / map_width - 1) * Math.PI / zoom + center_long ); }
+            function m_lat(canvy) { return ( ( canvy - map_height / 2 ) * 2 * Math.PI / ( -map_width * zoom * sec_std_prl ) + sin_ctr_lat); }
+
+            // Helper function to draw an irregular polygon on the map given a list of coordinates
+            function draw_area_on_map(cds, xoff=0, close=true) {
+                mapcxt.beginPath();
+                if (close) { mapcxt.moveTo(cxt_x(cds[cds.length - 1][0] + xoff), cxt_y(cds[cds.length - 1][1])); }
+                else { mapcxt.moveTo(cxt_x(cds[0][0]), cxt_y(cds[0][1])); }
+                cds.forEach(function (ll) {
+                    mapcxt.lineTo(cxt_x(ll[0] + xoff), cxt_y(ll[1]));
+                });
+                mapcxt.stroke();
+            }
+
+            // Helper function to draw countries and rivers, making use of draw_area_on_map
+            function draw_country_on_map(cntry, xoff=0) {
+                if (cntry.geometry.type == "Polygon") {
+                    draw_area_on_map(cntry.geometry.coordinates, xoff);
+                } else if (cntry.geometry.type == "MultiPolygon") {
+                    cntry.geometry.coordinates.forEach( function(e) { draw_area_on_map(e, xoff); } );
+                } else if (cntry.geometry.type == "LineString") {
+                    draw_area_on_map(cntry.geometry.coordinates, xoff, false);
+                }
+            }
+
+            // Helper function to draw cities, which doesn't make use of draw_area_on_map
+            function draw_city_on_map(ll, name, xoff=0) {
+                s = 2; cx = cxt_x(ll[0] + xoff); cy = cxt_y(ll[1]);
+                mapcxt.fillRect(cx - s, cy - s, 2*s, 2*s);
+                mapcxt.fillText(name, cx, cy + s);
+            }
+
+            // Map drawing function
+            function draw_map() {
+                // Set map title
+                map_detail.innerHTML = `Zoom: ${zoom} Center: ${coordinate_string} Std. Parallel: ${Math.round(deg(std_prl) * 10) / 10}`;
+                // Set canvas size
+                mymap.setAttribute("height", map_height);
+                // Blank back of canvas
+                mapcxt.fillStyle = backcolor;
+                mapcxt.fillRect(0, 0, map_width, map_height);
+                // Draw map!
+                mapcxt.fillStyle = forecolor;
+                mapcxt.lineWidth = 1;
+                get_edge_values();
+                textsize = Math.round(10 + Math.min((map_height - 256) / 64, (map_width - 720) / 128));
+                mapcxt.font = textsize + "px serif";
+                // Draw rivers
+                if (feature_buttons[1].checked) {
+                    mapcxt.strokeStyle = "blue";
+                    rivers_original.features.forEach(function(river) {
+                        if (river.properties.scalerank < zoom / 2) {
+                            if (true) {
+                                draw_country_on_map(river);
+                            }
+                        }
+                    })
+                }
+                // Draw lakes
+                if (feature_buttons[2].checked) {
+                    mapcxt.strokeStyle = "blue";
+                    lakes_original.features.forEach( function(lake) {
+                        if (lake.properties.scalerank < zoom) {
+                            mycoords = lake.geometry.coordinates[0];
+                            if (map_contains(mycoords[0]) || map_contains(mycoords[Math.round(mycoords.length/3)]) || map_contains(mycoords[Math.round(2*mycoords.length/3)])) {
+                                draw_area_on_map(mycoords);
+                            }
+                        }
+                    })
+                }
+                mapcxt.strokeStyle = forecolor;
+                // Draw countries
+                if (feature_buttons[0].checked) {
+                    geon.Countries.forEach(function(cntry) {
+                        if ((cntry.geometry.nmost > min_lat || cntry.geometry.smost < max_lat) && (cntry.geometry.emost > min_long || cntry.geometry.wmost < max_long)) {
+                            draw_country_on_map(cntry);
+                        }
+                    })
+                    // Take care of extra on sides
+                    if (max_long > 180) {
+                        geon.Countries.forEach(function(cntry) {
+                            if ((cntry.geometry.nmost > min_lat || cntry.geometry.smost < max_lat) && cntry.geometry.wmost < max_long - 360) {
+                                draw_country_on_map(cntry, 360);
+                            }
+                        } )
+                    } else if (min_long < -180) {
+                        geon.Countries.forEach(function(cntry) {
+                            if ((cntry.geometry.nmost > min_lat || cntry.geometry.smost < max_lat) && cntry.geometry.emost > min_long + 360) {
+                                draw_country_on_map(cntry, -360);
+                            }    
+                        } )
+                    }
+                }
+                // Draw cities and their names
+                let ll;
+                mapcxt.textAlign = "center";
+                mapcxt.textBaseline = "top";
+                if (feature_buttons[5].checked) {
+                    cities_original.features.forEach(function(city) {
+                        if (city.properties.scalerank + 1 < zoom / 2) {
+                            ll = city.geometry.coordinates;
+                            switch (map_contains(ll)) {
+                                case 1:
+                                    draw_city_on_map(ll, city.properties.name);
+                                    break;
+                                case 2:
+                                    draw_city_on_map(ll, city.properties.name, 360);
+                                    break;
+                                case -1:
+                                    draw_city_on_map(ll, city.properties.name, -360);
+                                    break;
+                            }
+                        }
+                    })
+                }
+                // Draw latitude and longitude lines, and markers
+                if (feature_buttons[3].checked) {
+                    let determinant = ((max_long - min_long) / map_width); // If the average 15 degrees are under 100 pixels, go with 15;
+                    let interval = determinant > 0.15 ? 15 : determinant > 0.05 ? 5 : 1; // then with five or one.
+                    let l, p, t, w; // Latitude/longitude, corresponding co-ordinate position, label text, label width
+                    // Latitude lines
+                    mapcxt.textBaseline = "bottom";
+                    for (l = interval * Math.ceil(min_lat / interval); l < max_lat; l += interval) {
+                        p = cxt_y(l);
+                        mapcxt.beginPath();
+                        mapcxt.moveTo(0, p);
+                        mapcxt.lineTo(map_width, p);
+                        mapcxt.stroke();
+                        if (feature_buttons[4].checked) {
+                            t = Math.abs(l) + "°" + (l > 0 ? "N":"S");
+                            w = mapcxt.measureText(t);
+                            mapcxt.fillStyle = backcolor;
+                            mapcxt.fillRect(0, p - textsize, Math.round(w.width), textsize);
+                            mapcxt.fillRect(map_width - Math.round(w.width), p - textsize, Math.round(w.width), textsize);
+                            mapcxt.fillStyle = forecolor;
+                            mapcxt.textAlign = "start";
+                            mapcxt.fillText(t, 0, p + 2);
+                            mapcxt.textAlign = "end";
+                            mapcxt.fillText(t, map_width, p + 2);
+                        }
+                    }
+                    // Longitude lines
+                    mapcxt.textAlign = "start";
+                    for (l = interval * Math.ceil(min_long / interval); l < max_long; l += interval) {
+                        p = cxt_x(l);
+                        mapcxt.beginPath();
+                        mapcxt.moveTo(p, 0);
+                        mapcxt.lineTo(p, map_height);
+                        mapcxt.stroke();
+                        if (feature_buttons[4].checked) {
+                            t = Math.abs(l) + "°" + (l > 0 ? "E":"W");
+                            w = mapcxt.measureText(t);
+                            mapcxt.fillStyle = backcolor;
+                            mapcxt.fillRect(p + 2, 0, Math.round(w.width), textsize);
+                            mapcxt.fillRect(p + 2, map_height - textsize, Math.round(w.width), textsize);
+                            mapcxt.fillStyle = forecolor;
+                            mapcxt.textBaseline = "top";
+                            mapcxt.fillText(t, p + 2, 0);
+                            mapcxt.textBaseline = "bottom";
+                            mapcxt.fillText(t, p + 2, map_height);
+                        }
+                    }
+                }
+            }
+
+        </script>
+    </body>
+</html>

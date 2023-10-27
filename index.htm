@@ -169,7 +169,8 @@
             topbox.addEventListener("dblclick", function (e) { topbox.style["display"] = "none"; }, false);
             const mymap = document.getElementById("main_map");
             const mapcxt = mymap.getContext("2d");
-            mymap.addEventListener("dblclick", (e) => { map_jump(e); }, false);
+            mymap.addEventListener("dblclick", (e) => { map_jump(e); }, true);
+            mymap.addEventListener("mousedown", (e) => { map_catch(e); }, true);
             const feature_buttons = document.querySelectorAll("input[type='checkbox']");
             feature_buttons.forEach(function(e) { e.checked = true });
 
@@ -199,6 +200,8 @@
                     controlbox.classList.remove("sticky");
                 }
             });
+//            window.addEventListener("mousemove", (e) => { map_drag(e); } );
+            window.addEventListener("mouseup", (e) => { map_release(e); } );
 
             // Degrees from radians function (not built-in?)
             function deg(radians) { return radians * 180 / Math.PI }
@@ -209,6 +212,10 @@
             let backcolor = "black"; let forecolor = "white"; // The background color and line color on the map
             let zoom = 1; // Scaling factor.  1 means that the whole world can be visible; larger numbers scale the map about the center.
             let center_lat = 0; let center_long = 0; // The coordinates of the center of the map - in RADIANS
+            let map_caught = false; // Whether the map has been clicked and dragged
+            let cursor_lat = 0; let cursor_long = 0; // The coordinates at which the map was caught - in RADIANS
+            let caught_x = 0; let caught_y = 0; // Offset x and y where caught point last moved
+            let maprect = mymap.getBoundingClientRect(); // Map rect - for finding offset when outside the map
             let sin_ctr_lat = Math.sin(center_lat) // The sine of the latitude in the center (for calculations)
             let std_prl = 0; let sec_std_prl = 1; // Standard parallel (in RADIANS) - could be described as the latitudes at which the map shapes are least distorted.
               // Its secant is the factor by which latitudes are scaled (after being scaled by their own cosine to effect equal areas)
@@ -432,6 +439,7 @@
                 effect_width();
             }
 
+            // To be called upon double-click in the map
             function map_jump(e) {
                 center_long = m_long(e.offsetX);
                 center_lat = m_lat(e.offsetY);
@@ -440,6 +448,43 @@
                 sin_ctr_lat = Math.sin(center_lat);
                 get_coordinate_string();
                 draw_map();
+            }
+
+            // To be called upon mousedown in the map
+            function map_catch(e) {
+                maprect = mymap.getBoundingClientRect();
+                caught_x = e.offsetX;
+                caught_y = e.offsetY;
+                cursor_long = m_long(e.offsetX);
+                cursor_lat = m_lat(e.offsetY);
+                map_caught = true;
+            }
+
+            // // To be called upon mousemove - anywhere
+            // // DEPRECATED - translate moves the coordinates, not the drawn image;
+            // // no good way to move w/o re-drawing map?  Or making images?  How do other maps do it?
+            // function map_drag(e) {
+            //     if (map_caught) {
+            //         offX = e.clientX - maprect.left;
+            //         offY = e.clientY - maprect.top;
+            //         mapcxt.translate(offX - caught_x, offY - caught_y);
+            //         console.log(`Map dragged by (${offX - caught_x},${offY - caught_y})`);
+            //         caught_x = offX;
+            //         caught_y = offY;
+            //     }
+            // }
+
+            // To be called upon mouseup - anywhere
+            function map_release(e) {
+                if (map_caught) {
+                    map_caught = false;
+                    center_long = cursor_long - Math.PI / zoom * ( 2 * (e.clientX - maprect.left) / map_width - 1);
+                    sin_ctr_lat = Math.sin(cursor_lat) - (e.clientY - maprect.top - map_height / 2) * ( -2 * Math.PI / ( map_width * zoom * sec_std_prl ) );
+                    sin_ctr_lat = (sin_ctr_lat + h >= 1) ? 1 - h : (sin_ctr_lat - h <= -1) ? h - 1 : sin_ctr_lat;
+                    center_lat = Math.asin(sin_ctr_lat);
+                    get_coordinate_string();
+                    draw_map();
+                }
             }
 
             /////////////////////////////////////////////////////////////////
